@@ -7,31 +7,21 @@
 #include "Zusi3Schnittstelle.h"
 
 //Bitte die #define der Zusi3Schnittstelle.h nutzen
-#if defined(ESP8266_Wifi) || defined(ESP32_Wifi)
+#if defined(ESP8266_Wifi) || defined(ESP32_Wifi) || defined(AVR_Wifi)
 #include "Credentials.h"
 #endif
 #ifdef ESP32_Ethernet
 //nothing
 #endif
-#ifdef Ethernet_Shield //Arduino Uno hat zu wenig RAM für Datenpakete
-byte *mac = new byte[6]{ 0x01, 0x02, 0x03, 0x04, 0x05, 0x06 };
-#endif
-#ifdef AVR_Wifi
-const char* ssid = "SSID";
-const char* password = "PASSWORD";
+#ifdef Ethernet_Shield  //Arduino Uno hat zu wenig RAM für Datenpakete
+byte* mac = new byte[6]{ 0x01, 0x02, 0x03, 0x04, 0x05, 0x06 };
 #endif
 
-Zusi3Schnittstelle *zusi;
+Zusi3Schnittstelle* zusi;
 
 void setup() {
 	Serial.begin(115200);
-	pinMode(16, OUTPUT);
-	pinMode(5, OUTPUT);
-	pinMode(12, OUTPUT);
-	pinMode(13, OUTPUT);
-	pinMode(4, OUTPUT);
-	pinMode(14, OUTPUT);
-	delay(1000);
+	pinMode(7, OUTPUT);
 
 #if defined(ESP8266_Wifi) || defined(ESP32_Wifi)
 	Serial.print("Verbinde mit ");
@@ -79,7 +69,7 @@ void setup() {
 	Serial.println(WiFi.localIP());
 #endif
 
-	zusi = new Zusi3Schnittstelle("10.0.0.20", 1436, "ESP8266 Client");
+	zusi = new Zusi3Schnittstelle("192.168.178.41", 1436, "ESP32 Tacho");
 	zusi->setDebugOutput(true);
 	zusi->reqFstAnz(Geschwindigkeit);
 	zusi->reqFstAnz(Status_Zugbeeinflussung);
@@ -96,8 +86,7 @@ void setup() {
 }
 
 void loop() {
-	Serial.println("Hello World!");
-	/*
+
 	Node *node = zusi->update();
 	if (node != NULL) {
 		for (int i = 0; i < node->getNodes()->size(); i++) {
@@ -107,8 +96,11 @@ void loop() {
 					Attribute *attr = subNode->getAttribute()->get(j);
 					if (attr->getIDAsInt() == Geschwindigkeit) {
 						Serial.print("Geschwindigkeit: ");
-						Serial.print((int) (attr->getDATAAsFloat() * 3.6F));
+						int velocity = (int) (attr->getDATAAsFloat() * 3.6F);
+						int pwm = (int) (attr->getDATAAsFloat() * 3.6F * 120.0 / 70.0);
+						Serial.print(velocity);
 						Serial.println(" km/h");
+						analogWrite(6, pwm);
 					}
 				}
 				for (int j = 0; j < subNode->getNodes()->size(); j++) {
@@ -163,5 +155,4 @@ void loop() {
 			}
 		}
 	}
-	*/
 }
