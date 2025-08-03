@@ -1,10 +1,7 @@
-/*
-* Author:	Sebastian Wolf
-* Created:	August 2018
-*/
 
 #include <Arduino.h>
 #include "Zusi3Schnittstelle.h"
+#include <SimpleCLI.h>
 
 //Bitte die #define der Zusi3Schnittstelle.h nutzen
 #if defined(ESP8266_Wifi) || defined(ESP32_Wifi) || defined(AVR_Wifi)
@@ -19,8 +16,69 @@ byte* mac = new byte[6]{ 0x01, 0x02, 0x03, 0x04, 0x05, 0x06 };
 
 Zusi3Schnittstelle* zusi;
 
+SimpleCLI cli;
+Command cmdWifi;
+Command cmdHelp;
+Command cmdZusi;
+
+
+void errorCallback(cmd_error* e) {
+    CommandError cmdError(e);
+		Serial.print("ERROR: ");
+		Serial.println(cmdError.toString());
+
+		Serial.println();
+		Serial.println("HELP MESSAGE:");
+		Serial.println(cli.toString());
+}
+
+
+void wifiCallback(Command* c) {
+	Argument arg = c->getArgument(0);
+  String ssid = arg.getValue();
+
+	arg = c->getArgument(1);
+  String password = arg.getValue();
+
+	Serial.print("ssid: ");
+	Serial.println(ssid);
+	Serial.print("password: ");
+	Serial.println(password);
+}
+
+
+void zusiCallback(Command* c) {
+	Argument arg = c->getArgument(0);
+  String ip = arg.getValue();
+	
+	arg = c->getArgument(1);
+  String port = arg.getValue();
+
+	Serial.print("ip: ");
+	Serial.println(ip);
+	Serial.print("port: ");
+	Serial.println(port);
+}
+
+
 void setup() {
 	Serial.begin(115200);
+
+	cli.setOnError(errorCallback);
+
+	cmdWifi = cli.addCmd("wifi");
+	cmdWifi.addArg("ssid");
+	cmdWifi.addArg("password");
+	cmdWifi.setDescription("Restarts the esp32 with the new wifi configuration.");
+
+	cmdZusi = cli.addCmd("zusi");
+	cmdZusi.addArg("ip");
+	cmdZusi.addArg("port");
+	cmdZusi.setDescription("Restarts the esp32 with the new zusi.");
+
+	cmdHelp = cli.addCommand("help");
+  cmdHelp.setDescription("Prints this help message.");
+
 	pinMode(7, OUTPUT);
 
 #if defined(ESP8266_Wifi) || defined(ESP32_Wifi)
@@ -70,11 +128,11 @@ void setup() {
 #endif
 
 	zusi = new Zusi3Schnittstelle("192.168.178.41", 1436, "ESP32 Tacho");
-	zusi->setDebugOutput(true);
+	// zusi->setDebugOutput(true); this causes a random error
 	zusi->reqFstAnz(Geschwindigkeit);
 	zusi->reqFstAnz(Status_Zugbeeinflussung);
 	zusi->requestFuehrerstandsbedienung(false);
-	zusi->requestProgrammdaten(true);
+	zusi->requestProgrammdaten(false);
 	int i = 0;
 	while (!zusi->connect()) {
 		Serial.print("Verbindung zu Zusi fehlgeschlagen (");
@@ -85,8 +143,41 @@ void setup() {
 	Serial.println("Verbunden mit Zusi");
 }
 
-void loop() {
 
+void loop() {
+	if (Serial.available()) {
+		String input = Serial.readStringUntil('\n');
+		cli.parse(input);
+	}
+
+	if (cli.available()) {
+    Command c = cli.getCmd();
+
+		int argNum = c.countArgs();
+
+		Serial.print("> ");
+		Serial.print(c.getName());
+		Serial.print(' ');
+
+		for (int i = 0; i<argNum; ++i) {
+			Argument arg = c.getArgument(i);
+			if(arg.isSet()) {
+				Serial.print(arg.toString());
+				Serial.print(' ');
+			}
+		}
+
+		Serial.println();
+
+		if (c == cmdWifi) { wifiCallback(&c); }
+		if (c == cmdZusi) { zusiCallback(&c); }
+		else if (c == cmdHelp) { 
+			Serial.println();
+			Serial.println("HELP MESSAGE:");
+			Serial.println(cli.toString());
+		}
+	}
+	
 	Node *node = zusi->update();
 	if (node != NULL) {
 		for (int i = 0; i < node->getNodes()->size(); i++) {
@@ -95,12 +186,14 @@ void loop() {
 				for (int j = 0; j < subNode->getAttribute()->size(); j++) {
 					Attribute *attr = subNode->getAttribute()->get(j);
 					if (attr->getIDAsInt() == Geschwindigkeit) {
-						Serial.print("Geschwindigkeit: ");
-						int velocity = (int) (attr->getDATAAsFloat() * 3.6F);
-						int pwm = (int) (attr->getDATAAsFloat() * 3.6F * 120.0 / 70.0);
-						Serial.print(velocity);
-						Serial.println(" km/h");
+						double kilometersPerHour = attr->getDATAAsFloat() * 3.6F;
+						int pwm = round(0.00547 * kilometersPerHour * kilometersPerHour + 1.26531 * kilometersPerHour + -2.12189);
 						analogWrite(6, pwm);
+						//Serial.print((int) kilometersPerHour);
+						//Serial.println(" km/h");
+						//Serial.print("pwm: ");
+						//Serial.println(pwm);
+
 					}
 				}
 				for (int j = 0; j < subNode->getNodes()->size(); j++) {
@@ -135,21 +228,6 @@ void loop() {
 								}
 							}
 						}
-					}
-				}
-			} else if (subNode->getIDAsInt() == 0x0C) {
-				for (int l = 0 ; l < subNode->getAttribute()->size() ; l++) {
-					Attribute *attr = subNode->getAttribute()->get(l);
-					if (attr->getIDAsInt() == 0x01) {
-						Serial.print("Verzeichnis: ");
-						Serial.print(attr->getDATAAsString());
-						Serial.println();
-					} else if (attr->getIDAsInt() == 0x02) {
-						Serial.print("Zugnummer: ");
-						Serial.print(attr->getDATAAsString());
-						Serial.println();
-					} else if (attr->getIDAsInt() == 0x03) {
-						Serial.println("Fahrplan geladen");
 					}
 				}
 			}
