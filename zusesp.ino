@@ -22,6 +22,22 @@ Command cmdHelp;
 Command cmdZusi;
 
 
+const uint32_t NVM_Offset = 0x290000;
+
+
+template<typename T>
+void FlashWrite(uint32_t address, const T& value) {
+  ESP.flashEraseSector((NVM_Offset+address)/4096);
+  ESP.flashWrite(NVM_Offset+address, (uint32_t*)&value, sizeof(value));
+}
+
+
+template<typename T>
+void FlashRead(uint32_t address, T& value) {
+  ESP.flashRead(NVM_Offset+address, (uint32_t*)&value, sizeof(value));
+}
+ 
+
 void errorCallback(cmd_error* e) {
     CommandError cmdError(e);
 		Serial.print("ERROR: ");
@@ -42,6 +58,13 @@ void wifiCallback(Command* c) {
 
 	Serial.print("ssid: ");
 	Serial.println(ssid);
+
+	String strOut;
+	FlashWrite<String>(0, ssid);
+  FlashRead<String>(0, strOut);
+	Serial.print("Str out: ");
+	Serial.println(strOut);
+
 	Serial.print("password: ");
 	Serial.println(password);
 }
@@ -58,6 +81,11 @@ void zusiCallback(Command* c) {
 	Serial.println(ip);
 	Serial.print("port: ");
 	Serial.println(port);
+
+	String strOut;
+	FlashRead<String>(0, strOut);
+	Serial.print("Str out: ");
+	Serial.println(strOut);
 }
 
 
@@ -145,6 +173,11 @@ void setup() {
 
 
 void loop() {
+	//String strOut;
+  //FlashRead<String>(0, strOut);
+	//Serial.print("Str out: ");
+	//Serial.println(strOut);
+
 	if (Serial.available()) {
 		String input = Serial.readStringUntil('\n');
 		cli.parse(input);
