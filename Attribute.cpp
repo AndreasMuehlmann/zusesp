@@ -110,6 +110,7 @@ int Attribute::getDATAAsInt() {
 	case 4:
 		return ((DATA[0] & 0xFF) | (DATA[1] & 0xFF) << 8 | (DATA[2] & 0xFF) << 16 | (DATA[3] & 0xFF) << 24);
 	}
+	return -1;
 }
 
 float Attribute::getDATAAsFloat() {

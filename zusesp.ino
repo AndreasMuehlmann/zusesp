@@ -1,18 +1,8 @@
-
 #include <Arduino.h>
 #include "Zusi3Schnittstelle.h"
 #include <SimpleCLI.h>
+#include <Preferences.h>
 
-//Bitte die #define der Zusi3Schnittstelle.h nutzen
-#if defined(ESP8266_Wifi) || defined(ESP32_Wifi) || defined(AVR_Wifi)
-#include "Credentials.h"
-#endif
-#ifdef ESP32_Ethernet
-//nothing
-#endif
-#ifdef Ethernet_Shield  //Arduino Uno hat zu wenig RAM für Datenpakete
-byte* mac = new byte[6]{ 0x01, 0x02, 0x03, 0x04, 0x05, 0x06 };
-#endif
 
 Zusi3Schnittstelle* zusi;
 
@@ -21,52 +11,39 @@ Command cmdWifi;
 Command cmdHelp;
 Command cmdZusi;
 
+Preferences prefs;
 
-const uint32_t NVM_Offset = 0x290000;
-
-
-template<typename T>
-void FlashWrite(uint32_t address, const T& value) {
-  ESP.flashEraseSector((NVM_Offset+address)/4096);
-  ESP.flashWrite(NVM_Offset+address, (uint32_t*)&value, sizeof(value));
-}
-
-
-template<typename T>
-void FlashRead(uint32_t address, T& value) {
-  ESP.flashRead(NVM_Offset+address, (uint32_t*)&value, sizeof(value));
-}
- 
 
 void errorCallback(cmd_error* e) {
-    CommandError cmdError(e);
-		Serial.print("ERROR: ");
-		Serial.println(cmdError.toString());
+	CommandError cmdError(e);
+	Serial.print("ERROR: ");
+	Serial.println(cmdError.toString());
 
-		Serial.println();
-		Serial.println("HELP MESSAGE:");
-		Serial.println(cli.toString());
+	Serial.println();
+	Serial.println("HELP MESSAGE:");
+	Serial.println(cli.toString());
 }
 
 
 void wifiCallback(Command* c) {
 	Argument arg = c->getArgument(0);
-  String ssid = arg.getValue();
+	String ssid = arg.getValue();
 
 	arg = c->getArgument(1);
-  String password = arg.getValue();
+	String password = arg.getValue();
 
-	Serial.print("ssid: ");
-	Serial.println(ssid);
+	prefs.putString("ssid", ssid);
+	prefs.putString("password", password);
 
-	String strOut;
-	FlashWrite<String>(0, ssid);
-  FlashRead<String>(0, strOut);
-	Serial.print("Str out: ");
-	Serial.println(strOut);
+	Serial.print("Saved ssid \"");
+	Serial.print(ssid);
+	Serial.print("\" and password \"");
+	Serial.print(password);
+	Serial.print("\"");
+	Serial.println();
 
-	Serial.print("password: ");
-	Serial.println(password);
+	Serial.println("Restarting...");
+	ESP.restart();
 }
 
 
@@ -77,107 +54,22 @@ void zusiCallback(Command* c) {
 	arg = c->getArgument(1);
   String port = arg.getValue();
 
-	Serial.print("ip: ");
-	Serial.println(ip);
-	Serial.print("port: ");
-	Serial.println(port);
+	prefs.putString("ip", ip);
+	prefs.putInt("port", port.toInt());
 
-	String strOut;
-	FlashRead<String>(0, strOut);
-	Serial.print("Str out: ");
-	Serial.println(strOut);
+	Serial.print("Saved ip \"");
+	Serial.print(ip);
+	Serial.print("\" and port \"");
+	Serial.print(port.toInt());
+	Serial.print("\"");
+	Serial.println();
+
+	Serial.println("Restarting...");
+	ESP.restart();
 }
 
 
-void setup() {
-	Serial.begin(115200);
-
-	cli.setOnError(errorCallback);
-
-	cmdWifi = cli.addCmd("wifi");
-	cmdWifi.addArg("ssid");
-	cmdWifi.addArg("password");
-	cmdWifi.setDescription("Restarts the esp32 with the new wifi configuration.");
-
-	cmdZusi = cli.addCmd("zusi");
-	cmdZusi.addArg("ip");
-	cmdZusi.addArg("port");
-	cmdZusi.setDescription("Restarts the esp32 with the new zusi.");
-
-	cmdHelp = cli.addCommand("help");
-  cmdHelp.setDescription("Prints this help message.");
-
-	pinMode(7, OUTPUT);
-
-#if defined(ESP8266_Wifi) || defined(ESP32_Wifi)
-	Serial.print("Verbinde mit ");
-	Serial.println(ssid);
-
-	WiFi.mode(WIFI_STA);
-	WiFi.begin(ssid, password);
-
-	while (WiFi.status() != WL_CONNECTED) {
-		delay(500);
-		Serial.print(".");
-	}
-
-	Serial.println("\nVerbunden");
-	Serial.print("IP-Adresse: ");
-	Serial.println(WiFi.localIP());
-#endif
-
-#ifdef ESP32_Ethernet
-	ETH.begin();
-#endif
-
-#ifdef Ethernet_Shield
-	if (Ethernet.begin(mac) == 0) {
-		Serial.println("Failed to configure Ethernet using DHCP");
-		return;
-	} else {
-		Serial.print("IP-Adresse: ");
-		Serial.println(Ethernet.localIP());
-	}
-#endif
-
-#ifdef AVR_Wifi
-	if (WiFi.status() == WL_NO_SHIELD) {
-		Serial.println("WiFi shield nicht vorhanden");
-		return;
-	}
-	WiFi.begin(ssid, password);
-	while (WiFi.status() != WL_CONNECTED) {
-		delay(500);
-		Serial.print(".");
-	}
-	Serial.println("\nVerbunden");
-	Serial.print("IP-Adresse: ");
-	Serial.println(WiFi.localIP());
-#endif
-
-	zusi = new Zusi3Schnittstelle("192.168.178.41", 1436, "ESP32 Tacho");
-	// zusi->setDebugOutput(true); this causes a random error
-	zusi->reqFstAnz(Geschwindigkeit);
-	zusi->reqFstAnz(Status_Zugbeeinflussung);
-	zusi->requestFuehrerstandsbedienung(false);
-	zusi->requestProgrammdaten(false);
-	int i = 0;
-	while (!zusi->connect()) {
-		Serial.print("Verbindung zu Zusi fehlgeschlagen (");
-		Serial.print(++i);
-		Serial.println(")");
-		delay(5000);
-	}
-	Serial.println("Verbunden mit Zusi");
-}
-
-
-void loop() {
-	//String strOut;
-  //FlashRead<String>(0, strOut);
-	//Serial.print("Str out: ");
-	//Serial.println(strOut);
-
+void updateCli() {
 	if (Serial.available()) {
 		String input = Serial.readStringUntil('\n');
 		cli.parse(input);
@@ -210,7 +102,104 @@ void loop() {
 			Serial.println(cli.toString());
 		}
 	}
-	
+}
+
+
+void setup() {
+	Serial.begin(115200);
+
+	prefs.begin("ESP Tacho", false);
+
+	cli.setOnError(errorCallback);
+
+	cmdWifi = cli.addCmd("wifi");
+	cmdWifi.addArg("ssid");
+	cmdWifi.addArg("password");
+	cmdWifi.setDescription("Restarts the esp32 with the new wifi configuration.");
+
+	cmdZusi = cli.addCmd("zusi");
+	cmdZusi.addArg("ip");
+	cmdZusi.addArg("port");
+	cmdZusi.setDescription("Restarts the esp32 with the new zusi.");
+
+	cmdHelp = cli.addCommand("help");
+	cmdHelp.setDescription("Prints this help message.");
+
+	pinMode(7, OUTPUT);
+
+	String ssid = prefs.getString("ssid", "");
+	String password = prefs.getString("password", "");
+	String ip = prefs.getString("ip", "");
+	int port = prefs.getInt("port", 0);
+
+#if defined(ESP8266_Wifi) || defined(ESP32_Wifi)
+	Serial.print("Verbinde mit ");
+	Serial.println(ssid);
+
+	WiFi.mode(WIFI_STA);
+	WiFi.begin(ssid, password);
+
+	while (WiFi.status() != WL_CONNECTED) {
+		delay(500);
+		Serial.print(".");
+		updateCli();
+	}
+
+	Serial.println("\nVerbunden");
+	Serial.print("IP-Adresse: ");
+	Serial.println(WiFi.localIP());
+#endif
+
+#ifdef ESP32_Ethernet
+	ETH.begin();
+#endif
+
+#ifdef Ethernet_Shield
+	if (Ethernet.begin(mac) == 0) {
+		Serial.println("Failed to configure Ethernet using DHCP");
+		return;
+	} else {
+		Serial.print("IP-Adresse: ");
+		Serial.println(Ethernet.localIP());
+	}
+#endif
+
+#ifdef AVR_Wifi
+	if (WiFi.status() == WL_NO_SHIELD) {
+		Serial.println("WiFi shield nicht vorhanden");
+		return;
+	}
+	WiFi.begin(ssid, password);
+	while (WiFi.status() != WL_CONNECTED) {
+		updateCli();
+		delay(500);
+		Serial.print(".");
+	}
+	Serial.println("\nVerbunden");
+	Serial.print("IP-Adresse: ");
+	Serial.println(WiFi.localIP());
+#endif
+	zusi = new Zusi3Schnittstelle(ip, port, "ESP Tacho");
+	// zusi->setDebugOutput(true); this causes a random error
+	zusi->reqFstAnz(Geschwindigkeit);
+	zusi->reqFstAnz(Status_Zugbeeinflussung);
+	zusi->requestFuehrerstandsbedienung(false);
+	zusi->requestProgrammdaten(false);
+	int i = 0;
+	while (!zusi->connect()) {
+		updateCli();
+		Serial.print("Verbindung zu Zusi fehlgeschlagen (");
+		Serial.print(++i);
+		Serial.println(")");
+		delay(2000);
+	}
+	Serial.println("Verbunden mit Zusi");
+}
+
+
+void loop() {
+	updateCli();
+
 	Node *node = zusi->update();
 	if (node != NULL) {
 		for (int i = 0; i < node->getNodes()->size(); i++) {
