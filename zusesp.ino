@@ -125,7 +125,13 @@ void setup() {
 	cmdHelp = cli.addCommand("help");
 	cmdHelp.setDescription("Prints this help message.");
 
-	pinMode(7, OUTPUT);
+	pinMode(19, OUTPUT);
+	pinMode(0, OUTPUT);
+	pinMode(1, OUTPUT);
+	pinMode(3, OUTPUT);
+	pinMode(4, OUTPUT);
+	pinMode(5, OUTPUT);
+	pinMode(6, OUTPUT);
 
 	String ssid = prefs.getString("ssid", "");
 	String password = prefs.getString("password", "");
@@ -210,7 +216,7 @@ void loop() {
 					if (attr->getIDAsInt() == Geschwindigkeit) {
 						double kilometersPerHour = attr->getDATAAsFloat() * 3.6F;
 						int pwm = round(0.00547 * kilometersPerHour * kilometersPerHour + 1.26531 * kilometersPerHour + -2.12189);
-						analogWrite(6, pwm);
+						analogWrite(19, pwm);
 						//Serial.print((int) kilometersPerHour);
 						//Serial.println(" km/h");
 						//Serial.print("pwm: ");
@@ -229,22 +235,22 @@ void loop() {
 									boolean state = attr->getDATAAsBoolean();
 									switch (attr->getIDAsInt()) {
 									case 5: //1000Hz
-										digitalWrite(12, state); //D3
+										digitalWrite(4, state); //D3
 										break;
 									case 6: //55
-										digitalWrite(16, state); //D0
+										digitalWrite(3, state); //D0
 										break;
 									case 7: //70
-										digitalWrite(5, state); //D1
+										digitalWrite(1, state); //D1
 										break;
 									case 8: //85
-										digitalWrite(4, state); //D2
+										digitalWrite(0, state); //D2
 										break;
 									case 10: //500Hz
-										digitalWrite(13, state); //D7
+										digitalWrite(5, state); //D7
 										break;
 									case 11:  //Befehl 40
-										digitalWrite(14, state); //D5
+										digitalWrite(6, state); //D5
 										break;
 									}
 								}
